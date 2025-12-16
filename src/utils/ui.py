@@ -803,14 +803,13 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         import os
         import requests
         
-        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "update.sh")
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "update.sh")
         
         if not os.path.exists(script_path):
             self.show_error("Update script not found.\nPlease update manually with:\ngit pull origin main")
             return
         
         try:
-            # Fetch remote version from GitHub
             response = requests.get(
                 "https://raw.githubusercontent.com/evanovar/RobloxAccountManagerLinux/main/version.txt",
                 timeout=5
@@ -827,7 +826,6 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
                 self.show_info(f"Already up to date!\n\nYou are running version {current_version}")
                 return
             
-            # Show update available dialog
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 modal=True,
@@ -844,7 +842,6 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
             if response_id != Gtk.ResponseType.YES:
                 return
             
-            # Launch update script
             terminal_emulators = [
                 ["konsole", "-e"],
                 ["gnome-terminal", "--"],
