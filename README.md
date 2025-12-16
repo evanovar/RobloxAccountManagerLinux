@@ -15,7 +15,6 @@ A modern GTK4 profile manager for [Sober](https://sober.vinegarhq.org/) on Linux
 - 🎮 **Direct Game Launch** - Launch specific games directly from the manager
 - 🔧 **Settings** - Configurable multi-instance support, auto-refresh, and more
 - 🎨 **Modern GTK4 UI** - Native Linux interface with dark theme support
-- 📦 **No Dependencies** - Uses only standard library (except `requests` for game name fetching)
 
 ## Requirements
 
