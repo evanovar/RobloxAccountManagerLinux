@@ -75,7 +75,7 @@ python main.py
 
 1. Open the application
 2. Click the settings icon (⚙️) in the header bar
-3. Click **"🔄 Check for Updates"**
+3. Click **"Check for Updates"**
 4. Follow the instructions in the terminal
 
 ### Method 2: Using the Update Script
