@@ -6,19 +6,17 @@ Main entry point for the GTK4 application
 
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
 
-from classes import ProfileManager
-from utils.ui import ProfileManagerWindow, ProfileManagerApp
-
+from src.utils.ui import ProfileManagerApp
 
 def main():
     """Main application entry point"""
-    data_folder = "ProfileManagerData"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    data_folder = os.path.join(script_dir, "ProfileManagerData")
     if not os.path.exists(data_folder):
         os.makedirs(data_folder)
     
