@@ -676,12 +676,12 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
                     self.show_error("Username cannot be empty.")
                     return
                 
-                success = self.manager.launch_sober_join_user(profile_name, username)
+                d.destroy()
+                success, message = self.manager.launch_sober_join_user(profile_name, username)
                 if success:
-                    self.show_info(f"Launching profile '{profile_name}' to join user '{username}'!")
-                    d.destroy()
+                    self.show_info(f"Launching Sober to join {username}!")
                 else:
-                    self.show_error(f"Failed to launch Sober for profile '{profile_name}'")
+                    self.show_error(f"Failed to join user:\n{message}")
             elif response == Gtk.ResponseType.CANCEL:
                 d.destroy()
         

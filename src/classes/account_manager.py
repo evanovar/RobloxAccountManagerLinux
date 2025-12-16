@@ -125,10 +125,8 @@ class ProfileManager:
             print(f"[ERROR] Profile '{profile_name}' not found")
             return False
         
-        # Get profile path
         profile_path = Path(self.profiles[profile_name]['path'])
         
-        # Delete physical directory (but not for Main Profile which uses home)
         if profile_name != "Main Profile" and profile_path.exists():
             try:
                 import shutil
@@ -137,7 +135,6 @@ class ProfileManager:
             except Exception as e:
                 print(f"[WARNING] Failed to delete profile directory: {e}")
         
-        # Remove from profiles dict
         del self.profiles[profile_name]
         self.save_profiles()
         print(f"[SUCCESS] Deleted profile: {profile_name}")
@@ -260,12 +257,10 @@ class ProfileManager:
         try:
             with open(cookie_file, 'r') as f:
                 content = f.read()
-                # Extract .ROBLOSECURITY cookie
                 if '.ROBLOSECURITY=' in content:
                     cookie_line = [line for line in content.split(';') if '.ROBLOSECURITY=' in line][0]
                     cookie_value = cookie_line.split('.ROBLOSECURITY=')[1].strip()
                     
-                    # Fetch username from Roblox API
                     import requests
                     headers = {'Cookie': f'.ROBLOSECURITY={cookie_value}'}
                     response = requests.get('https://users.roblox.com/v1/users/authenticated', headers=headers, timeout=5)
@@ -279,23 +274,88 @@ class ProfileManager:
         return None
     
     def launch_sober_join_user(self, profile_name, username):
-        """Launch Sober and join a specific user"""
+        """Launch Sober and join a specific user by fetching their job ID"""
         if profile_name not in self.profiles:
             print(f"[ERROR] Profile '{profile_name}' not found")
-            return False
+            return False, "Profile not found"
         
         profile_path = self.profiles[profile_name]['path']
         
         if not os.path.exists(profile_path):
             print(f"[ERROR] Profile directory not found: {profile_path}")
-            return False
+            return False, "Profile directory not found"
         
-        # Build Roblox URI for joining user
-        roblox_uri = f"roblox://user?username={username}"
+        cookie_file = Path(profile_path) / ".var" / "app" / "org.vinegarhq.Sober" / "data" / "sober" / "cookies"
         
-        print(f"[INFO] Launching Sober to join user: {username}")
+        if not cookie_file.exists():
+            print(f"[ERROR] No cookies found for profile '{profile_name}'")
+            return False, "Profile not logged in"
         
         try:
+            with open(cookie_file, 'r') as f:
+                content = f.read()
+                if '.ROBLOSECURITY=' not in content:
+                    return False, "Invalid cookie format"
+                
+                cookie_line = [line for line in content.split(';') if '.ROBLOSECURITY=' in line][0]
+                cookie_value = cookie_line.split('.ROBLOSECURITY=')[1].strip()
+            
+            import requests
+            user_response = requests.post(
+                'https://users.roblox.com/v1/usernames/users',
+                json={"usernames": [username], "excludeBannedUsers": True},
+                timeout=5
+            )
+            
+            if user_response.status_code != 200:
+                return False, "Failed to find user"
+            
+            user_data = user_response.json()
+            if not user_data.get('data') or len(user_data['data']) == 0:
+                return False, f"User '{username}' not found"
+            
+            user_id = user_data['data'][0]['id']
+            
+            csrf_response = requests.post(
+                'https://auth.roblox.com/v2/logout',
+                headers={'Cookie': f'.ROBLOSECURITY={cookie_value}'},
+                timeout=5
+            )
+            csrf_token = csrf_response.headers.get('x-csrf-token', '')
+            
+            presence_response = requests.post(
+                'https://presence.roblox.com/v1/presence/users',
+                headers={
+                    'Cookie': f'.ROBLOSECURITY={cookie_value}',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrf_token
+                },
+                json={"userIds": [user_id]},
+                timeout=5
+            )
+            
+            if presence_response.status_code != 200:
+                return False, "Failed to get user presence"
+            
+            presence_data = presence_response.json()
+            if not presence_data.get('userPresences') or len(presence_data['userPresences']) == 0:
+                return False, "User presence not found"
+            
+            presence = presence_data['userPresences'][0]
+            
+            if presence.get('userPresenceType') != 2:
+                return False, f"{username} is not currently in a game"
+            
+            place_id = presence.get('placeId')
+            job_id = presence.get('gameId')
+            
+            if not place_id or not job_id:
+                return False, "Could not get game information"
+            
+            roblox_uri = f"roblox://experiences/start?placeId={place_id}&gameInstanceId={job_id}"
+            
+            print(f"[INFO] Joining {username} in place {place_id}, job {job_id}")
+            
             if profile_name == "Main Profile":
                 subprocess.Popen(
                     ["flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
@@ -313,12 +373,15 @@ class ProfileManager:
                     stdin=subprocess.DEVNULL
                 )
             
-            print(f"[SUCCESS] Launched Sober to join user: {username}")
-            return True
+            print(f"[SUCCESS] Launched Sober to join {username}")
+            return True, f"Joining {username}"
             
+        except requests.RequestException as e:
+            print(f"[ERROR] Network error: {e}")
+            return False, "Network error - check your connection"
         except Exception as e:
-            print(f"[ERROR] Failed to launch Sober: {e}")
-            return False
+            print(f"[ERROR] Failed to launch: {e}")
+            return False, str(e)
     
     def get_favorite_games(self):
         """Get list of favorite games"""
