@@ -779,6 +779,13 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         separator2 = Gtk.Separator()
         content_area.append(separator2)
         
+        update_button = Gtk.Button(label="Check for Updates")
+        update_button.connect("clicked", lambda b: self.check_for_updates())
+        content_area.append(update_button)
+        
+        separator3 = Gtk.Separator()
+        content_area.append(separator3)
+        
         about_label = Gtk.Label()
         about_label.set_markup(
             "<b>Sober Profile Manager</b> v1.0.2-Linux\n\n"
@@ -790,6 +797,78 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         dialog.add_button("Close", Gtk.ResponseType.CLOSE)
         dialog.connect("response", lambda d, r: d.destroy())
         dialog.present()
+    
+    def check_for_updates(self):
+        """Check for and apply updates"""
+        import os
+        import requests
+        
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "update.sh")
+        
+        if not os.path.exists(script_path):
+            self.show_error("Update script not found.\nPlease update manually with:\ngit pull origin main")
+            return
+        
+        try:
+            # Fetch remote version from GitHub
+            response = requests.get(
+                "https://raw.githubusercontent.com/evanovar/RobloxAccountManagerLinux/main/version.txt",
+                timeout=5
+            )
+            
+            if response.status_code != 200:
+                self.show_error("Failed to check for updates.\nCouldn't connect to GitHub.")
+                return
+            
+            remote_version = response.text.strip()
+            current_version = self.get_application().version
+            
+            if remote_version == current_version:
+                self.show_info(f"Already up to date!\n\nYou are running version {current_version}")
+                return
+            
+            # Show update available dialog
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                modal=True,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.YES_NO,
+                text=f"Update Available!"
+            )
+            dialog.set_property("secondary-text", 
+                f"Current version: {current_version}\nNew version: {remote_version}\n\nDo you want to update now?")
+            
+            response_id = dialog.run()
+            dialog.destroy()
+            
+            if response_id != Gtk.ResponseType.YES:
+                return
+            
+            # Launch update script
+            terminal_emulators = [
+                ["konsole", "-e"],
+                ["gnome-terminal", "--"],
+                ["xterm", "-e"],
+                ["alacritty", "-e"],
+                ["kitty", "-e"]
+            ]
+            
+            terminal_found = False
+            for terminal in terminal_emulators:
+                if subprocess.run(["which", terminal[0]], capture_output=True).returncode == 0:
+                    subprocess.Popen(terminal + ["bash", script_path])
+                    terminal_found = True
+                    break
+            
+            if not terminal_found:
+                self.show_error("No terminal emulator found.\nPlease run manually:\nbash update.sh")
+            else:
+                self.show_info("Update script launched in terminal.\nFollow the instructions there.")
+                
+        except requests.RequestException as e:
+            self.show_error(f"Failed to check for updates:\n{e}\n\nCheck your internet connection.")
+        except Exception as e:
+            self.show_error(f"Failed to check for updates:\n{e}")
     
     def on_multi_instance_changed(self, switch, state):
         """Handle multi-instance setting change"""
@@ -848,6 +927,7 @@ class ProfileManagerApp(Gtk.Application):
     
     def __init__(self):
         super().__init__(application_id="com.evanovar.SoberProfileManager")
+        self.version = "1.0.2"
     
     def do_activate(self):
         """Application activation"""

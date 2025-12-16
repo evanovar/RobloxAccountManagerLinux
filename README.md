@@ -53,9 +53,8 @@ flatpak install flathub org.vinegarhq.Sober
 ### 3. Clone the Repository
 
 ```bash
-git clone https://github.com/evanovar/RobloxAccountManager.git
-cd RobloxAccountManager
-git checkout linux
+git clone https://github.com/evanovar/RobloxAccountManagerLinux.git
+cd RobloxAccountManagerLinux
 ```
 
 ### 4. Install Python Dependencies
@@ -70,6 +69,36 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## Updating
+
+### Method 1: Using the Built-in Updater (Recommended)
+
+1. Open the application
+2. Click the settings icon (⚙️) in the header bar
+3. Click **"🔄 Check for Updates"**
+4. Follow the instructions in the terminal
+
+### Method 2: Using the Update Script
+
+```bash
+bash update.sh
+```
+
+The update script will:
+- Check for updates from GitHub
+- Show you what changed
+- Backup your ProfileManagerData
+- Pull the latest changes
+- Update dependencies if needed
+
+### Method 3: Manual Update
+
+```bash
+git pull origin main
+pip install -r requirements.txt --upgrade
+```
+
+**Note**: Your profile data in `ProfileManagerData/` is preserved during updates and backed up automatically.
 
 ## Troubleshooting
 
