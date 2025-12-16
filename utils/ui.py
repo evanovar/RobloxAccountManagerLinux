@@ -259,11 +259,15 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         launch_place_button = Gtk.Button(label="Launch Place ID")
         launch_place_button.connect("clicked", self.on_launch_place_id)
         
+        join_user_button = Gtk.Button(label="Join User")
+        join_user_button.connect("clicked", self.on_join_user)
+        
         refresh_button = Gtk.Button(label="Refresh")
         refresh_button.connect("clicked", lambda b: self.refresh_profiles())
         
         button_box.append(add_button)
         button_box.append(launch_place_button)
+        button_box.append(join_user_button)
         button_box.append(refresh_button)
         content_box.append(button_box)
         
@@ -388,9 +392,15 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         
         profile_dropdown = Gtk.DropDown()
         profile_list = Gtk.StringList()
-        for profile_name in self.manager.profiles.keys():
+        profile_names = list(self.manager.profiles.keys())
+        for profile_name in profile_names:
             profile_list.append(profile_name)
         profile_dropdown.set_model(profile_list)
+        
+        last_profile = self.manager.get_setting('last_selected_profile', '')
+        if last_profile in profile_names:
+            profile_dropdown.set_selected(profile_names.index(last_profile))
+        
         content_area.append(profile_dropdown)
         
         place_id_label = Gtk.Label(label="Place ID (or full game URL):")
@@ -399,6 +409,11 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         
         place_id_entry = Gtk.Entry()
         place_id_entry.set_placeholder_text("e.g., 123456789 or https://www.roblox.com/games/123456789")
+        
+        last_place_id = self.manager.get_setting('last_place_id', '')
+        if last_place_id:
+            place_id_entry.set_text(last_place_id)
+        
         content_area.append(place_id_entry)
         
         private_server_label = Gtk.Label(label="Private Server Code (optional):")
@@ -407,6 +422,11 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         
         private_server_entry = Gtk.Entry()
         private_server_entry.set_placeholder_text("Leave empty for public server")
+        
+        last_private_code = self.manager.get_setting('last_private_server_code', '')
+        if last_private_code:
+            private_server_entry.set_text(last_private_code)
+        
         content_area.append(private_server_entry)
         
         separator = Gtk.Separator()
@@ -558,6 +578,9 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
                     return
                 
                 profile_name = profile_names[selected_index]
+                
+                self.manager.set_setting('last_selected_profile', profile_name)
+                
                 place_id_input = place_id_entry.get_text().strip()
                 private_server_code = private_server_entry.get_text().strip() or None
                 
@@ -575,12 +598,87 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
                     self.show_error("Invalid Place ID or URL format.")
                     return
                 
+                self.manager.set_setting('last_place_id', place_id_input)
+                self.manager.set_setting('last_private_server_code', private_server_code or '')
+                
                 success = self.manager.launch_sober_with_place_id(profile_name, place_id, private_server_code)
                 if success:
                     msg = f"Launching profile '{profile_name}' with place ID {place_id}"
                     if private_server_code:
                         msg += f" (Private Server)"
                     self.show_info(msg)
+                    d.destroy()
+                else:
+                    self.show_error(f"Failed to launch Sober for profile '{profile_name}'")
+            elif response == Gtk.ResponseType.CANCEL:
+                d.destroy()
+        
+        dialog.connect("response", handle_response)
+        dialog.present()
+    
+    def on_join_user(self, button):
+        """Handle join user button"""
+        if not self.manager.profiles:
+            self.show_warning("No Profiles", "Please create a profile first.")
+            return
+        
+        dialog = Gtk.Dialog(title="Join User", transient_for=self, modal=True)
+        dialog.set_default_size(400, 150)
+        content_area = dialog.get_content_area()
+        content_area.set_spacing(10)
+        content_area.set_margin_top(10)
+        content_area.set_margin_bottom(10)
+        content_area.set_margin_start(10)
+        content_area.set_margin_end(10)
+        
+        profile_label = Gtk.Label(label="Select Profile:")
+        profile_label.set_xalign(0)
+        content_area.append(profile_label)
+        
+        profile_dropdown = Gtk.DropDown()
+        profile_list = Gtk.StringList()
+        profile_names = list(self.manager.profiles.keys())
+        for profile_name in profile_names:
+            profile_list.append(profile_name)
+        profile_dropdown.set_model(profile_list)
+        
+        last_profile = self.manager.get_setting('last_selected_profile', '')
+        if last_profile in profile_names:
+            profile_dropdown.set_selected(profile_names.index(last_profile))
+        
+        content_area.append(profile_dropdown)
+        
+        username_label = Gtk.Label(label="Roblox Username:")
+        username_label.set_xalign(0)
+        content_area.append(username_label)
+        
+        username_entry = Gtk.Entry()
+        username_entry.set_placeholder_text("Enter Roblox username to join")
+        content_area.append(username_entry)
+        
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Join", Gtk.ResponseType.OK)
+        
+        def handle_response(d, response):
+            if response == Gtk.ResponseType.OK:
+                selected_index = profile_dropdown.get_selected()
+                profile_names_list = list(self.manager.profiles.keys())
+                if selected_index >= len(profile_names_list):
+                    self.show_error("Please select a profile.")
+                    return
+                
+                profile_name = profile_names_list[selected_index]
+                username = username_entry.get_text().strip()
+                
+                self.manager.set_setting('last_selected_profile', profile_name)
+                
+                if not username:
+                    self.show_error("Username cannot be empty.")
+                    return
+                
+                success = self.manager.launch_sober_join_user(profile_name, username)
+                if success:
+                    self.show_info(f"Launching profile '{profile_name}' to join user '{username}'!")
                     d.destroy()
                 else:
                     self.show_error(f"Failed to launch Sober for profile '{profile_name}'")
@@ -683,7 +781,7 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         
         about_label = Gtk.Label()
         about_label.set_markup(
-            "<b>Sober Profile Manager</b> v1.0.1-Linux\n\n"
+            "<b>Sober Profile Manager</b> v1.0.2-Linux\n\n"
             "Made by evanovar\n\n"
         )
         about_label.set_justify(Gtk.Justification.CENTER)

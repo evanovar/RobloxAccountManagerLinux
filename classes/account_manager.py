@@ -125,6 +125,19 @@ class ProfileManager:
             print(f"[ERROR] Profile '{profile_name}' not found")
             return False
         
+        # Get profile path
+        profile_path = Path(self.profiles[profile_name]['path'])
+        
+        # Delete physical directory (but not for Main Profile which uses home)
+        if profile_name != "Main Profile" and profile_path.exists():
+            try:
+                import shutil
+                shutil.rmtree(profile_path)
+                print(f"[SUCCESS] Deleted profile directory: {profile_path}")
+            except Exception as e:
+                print(f"[WARNING] Failed to delete profile directory: {e}")
+        
+        # Remove from profiles dict
         del self.profiles[profile_name]
         self.save_profiles()
         print(f"[SUCCESS] Deleted profile: {profile_name}")
@@ -217,6 +230,95 @@ class ProfileManager:
         if profile_name in self.profiles:
             return self.profiles[profile_name].get('note', '')
         return ''
+    
+    def is_profile_logged_in(self, profile_name):
+        """Check if profile has a valid .ROBLOSECURITY cookie"""
+        if profile_name not in self.profiles:
+            return False
+        
+        profile_path = Path(self.profiles[profile_name]['path'])
+        cookie_file = profile_path / ".var" / "app" / "org.vinegarhq.Sober" / "data" / "sober" / "cookies"
+        
+        if not cookie_file.exists():
+            return False
+        
+        try:
+            with open(cookie_file, 'r') as f:
+                content = f.read()
+                return '.ROBLOSECURITY=' in content and 'WARNING:-DO-NOT-SHARE-THIS' in content
+        except Exception:
+            return False
+    
+    def get_profile_username(self, profile_name):
+        """Get Roblox username for a profile by reading cookie and fetching from API"""
+        if not self.is_profile_logged_in(profile_name):
+            return None
+        
+        profile_path = Path(self.profiles[profile_name]['path'])
+        cookie_file = profile_path / ".var" / "app" / "org.vinegarhq.Sober" / "data" / "sober" / "cookies"
+        
+        try:
+            with open(cookie_file, 'r') as f:
+                content = f.read()
+                # Extract .ROBLOSECURITY cookie
+                if '.ROBLOSECURITY=' in content:
+                    cookie_line = [line for line in content.split(';') if '.ROBLOSECURITY=' in line][0]
+                    cookie_value = cookie_line.split('.ROBLOSECURITY=')[1].strip()
+                    
+                    # Fetch username from Roblox API
+                    import requests
+                    headers = {'Cookie': f'.ROBLOSECURITY={cookie_value}'}
+                    response = requests.get('https://users.roblox.com/v1/users/authenticated', headers=headers, timeout=5)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data.get('name', 'Unknown')
+        except Exception as e:
+            print(f"[WARNING] Failed to get username: {e}")
+        
+        return None
+    
+    def launch_sober_join_user(self, profile_name, username):
+        """Launch Sober and join a specific user"""
+        if profile_name not in self.profiles:
+            print(f"[ERROR] Profile '{profile_name}' not found")
+            return False
+        
+        profile_path = self.profiles[profile_name]['path']
+        
+        if not os.path.exists(profile_path):
+            print(f"[ERROR] Profile directory not found: {profile_path}")
+            return False
+        
+        # Build Roblox URI for joining user
+        roblox_uri = f"roblox://user?username={username}"
+        
+        print(f"[INFO] Launching Sober to join user: {username}")
+        
+        try:
+            if profile_name == "Main Profile":
+                subprocess.Popen(
+                    ["flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
+                    preexec_fn=os.setsid,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL
+                )
+            else:
+                subprocess.Popen(
+                    ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
+                    preexec_fn=os.setsid,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL
+                )
+            
+            print(f"[SUCCESS] Launched Sober to join user: {username}")
+            return True
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to launch Sober: {e}")
+            return False
     
     def get_favorite_games(self):
         """Get list of favorite games"""
