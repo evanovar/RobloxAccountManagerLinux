@@ -781,7 +781,7 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         
         about_label = Gtk.Label()
         about_label.set_markup(
-            "<b>Sober Profile Manager</b> v1.0.2-Linux\n\n"
+            "<b>Sober Profile Manager</b> v1.0.3-Linux\n\n"
             "Made by evanovar\n\n"
         )
         about_label.set_justify(Gtk.Justification.CENTER)
@@ -829,31 +829,32 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
             dialog.set_property("secondary-text", 
                 f"Current version: {current_version}\nNew version: {remote_version}\n\nDo you want to update now?")
             
-            response_id = dialog.run()
-            dialog.destroy()
+            def handle_update_response(d, response):
+                if response == Gtk.ResponseType.YES:
+                    terminal_emulators = [
+                        ["konsole", "-e"],
+                        ["gnome-terminal", "--"],
+                        ["xterm", "-e"],
+                        ["alacritty", "-e"],
+                        ["kitty", "-e"]
+                    ]
+                    
+                    terminal_found = False
+                    for terminal in terminal_emulators:
+                        if subprocess.run(["which", terminal[0]], capture_output=True).returncode == 0:
+                            subprocess.Popen(terminal + ["bash", script_path])
+                            terminal_found = True
+                            break
+                    
+                    if not terminal_found:
+                        self.show_error("No terminal emulator found.\nPlease run manually:\nbash update.sh")
+                    else:
+                        self.show_info("Update script launched in terminal.\nFollow the instructions there.")
+                
+                d.destroy()
             
-            if response_id != Gtk.ResponseType.YES:
-                return
-            
-            terminal_emulators = [
-                ["konsole", "-e"],
-                ["gnome-terminal", "--"],
-                ["xterm", "-e"],
-                ["alacritty", "-e"],
-                ["kitty", "-e"]
-            ]
-            
-            terminal_found = False
-            for terminal in terminal_emulators:
-                if subprocess.run(["which", terminal[0]], capture_output=True).returncode == 0:
-                    subprocess.Popen(terminal + ["bash", script_path])
-                    terminal_found = True
-                    break
-            
-            if not terminal_found:
-                self.show_error("No terminal emulator found.\nPlease run manually:\nbash update.sh")
-            else:
-                self.show_info("Update script launched in terminal.\nFollow the instructions there.")
+            dialog.connect("response", handle_update_response)
+            dialog.present()
                 
         except requests.RequestException as e:
             self.show_error(f"Failed to check for updates:\n{e}\n\nCheck your internet connection.")

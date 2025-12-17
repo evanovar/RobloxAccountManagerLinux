@@ -5,6 +5,9 @@ echo "Sober Profile Manager - Updater"
 echo "==================================="
 echo ""
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR" || exit 1
+
 if ! command -v git &> /dev/null; then
     echo "Error: git is not installed. Please install git first."
     echo "  Arch/Manjaro: sudo pacman -S git"
@@ -52,22 +55,43 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     
     if [ -d "ProfileManagerData" ]; then
         BACKUP_DIR="ProfileManagerData_backup_$(date +%Y%m%d_%H%M%S)"
-        cp -r ProfileManagerData "$BACKUP_DIR"
-        echo "✓ Backup created: $BACKUP_DIR"
+        if cp -r ProfileManagerData "$BACKUP_DIR"; then
+            echo "✓ Backup created: $BACKUP_DIR"
+        else
+            echo "✗ Warning: Backup creation failed"
+        fi
+    else
+        echo "⚠ ProfileManagerData directory not found (nothing to back up)"
     fi
     
     echo ""
     echo "Pulling latest changes..."
     
-    if git pull origin "$CURRENT_BRANCH"; then
+    if ! git diff-index --quiet HEAD --; then
+        echo "⚠ Local changes detected. Stashing them temporarily..."
+        git stash
+        STASHED=1
+    else
+        STASHED=0
+    fi
+    
+    git pull origin "$CURRENT_BRANCH"
+    GIT_PULL_EXIT=$?
+    
+    if [ $STASHED -eq 1 ]; then
+        echo "Restoring your local changes..."
+        git stash pop 2>/dev/null || echo "⚠ Warning: Could not automatically restore changes. Use 'git stash pop' manually."
+    fi
+    
+    if [ $GIT_PULL_EXIT -eq 0 ]; then
         echo ""
         echo "✓ Update successful!"
         echo ""
         
-        if git diff HEAD@{1} HEAD --name-only | grep -q "requirements.txt"; then
+        if git diff HEAD@{1} HEAD --name-only 2>/dev/null | grep -q "requirements.txt"; then
             echo "Dependencies may have changed. Updating..."
             if command -v pip &> /dev/null; then
-                pip install -r requirements.txt --upgrade
+                pip install -r requirements.txt --upgrade 2>&1
                 echo "✓ Dependencies updated!"
             else
                 echo "⚠ Warning: pip not found. Please manually run:"
@@ -77,19 +101,29 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         
         echo ""
         echo "==================================="
-        echo "Update complete! You can now run:"
+        echo "Update complete!"
+        echo ""
+        echo "IMPORTANT: Close the app and restart it:"
         echo "  python main.py"
         echo "==================================="
     else
         echo ""
-        echo "✗ Update failed. There may be conflicts."
+        echo "✗ Update failed (git exit code: $GIT_PULL_EXIT)"
+        echo "There may be conflicts or connectivity issues."
         echo "If you have local changes, try:"
         echo "  git stash        # Save your changes"
         echo "  git pull         # Update"
         echo "  git stash pop    # Restore your changes"
+        echo ""
+        echo "Press Enter to continue..."
+        read
         exit 1
     fi
 else
     echo "Update cancelled."
     exit 0
 fi
+
+echo ""
+echo "Press Enter to close this window..."
+read
