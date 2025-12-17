@@ -26,15 +26,6 @@ class ProfileManager:
             default_base = Path(self.data_folder) / "Profiles"
             default_base.mkdir(parents=True, exist_ok=True)
             self.save_base_directory(str(default_base))
-        
-        if not self.profiles:
-            self.profiles["Main Profile"] = {
-                'name': "Main Profile",
-                'path': str(Path.home()),
-                'note': ''
-            }
-            self.save_profiles()
-            print("[SUCCESS] Created Main Profile")
     
     def load_profiles(self):
         """Load saved profiles from JSON file"""
@@ -127,7 +118,7 @@ class ProfileManager:
         
         profile_path = Path(self.profiles[profile_name]['path'])
         
-        if profile_name != "Main Profile" and profile_path.exists():
+        if profile_path.exists():
             try:
                 import shutil
                 shutil.rmtree(profile_path)
@@ -187,22 +178,13 @@ class ProfileManager:
         print(f"[INFO] Launching Sober with profile: {profile_name}")
         
         try:
-            if profile_name == "Main Profile":
-                subprocess.Popen(
-                    ["flatpak", "run", "org.vinegarhq.Sober"],
-                    preexec_fn=os.setsid,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL
-                )
-            else:
-                subprocess.Popen(
-                    ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober"],
-                    preexec_fn=os.setsid,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL
-                )
+            subprocess.Popen(
+                ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober"],
+                preexec_fn=os.setsid,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL
+            )
             
             print(f"[SUCCESS] Sober launched with profile: {profile_name}")
             return True
@@ -356,22 +338,13 @@ class ProfileManager:
             
             print(f"[INFO] Joining {username} in place {place_id}, job {job_id}")
             
-            if profile_name == "Main Profile":
-                subprocess.Popen(
-                    ["flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
-                    preexec_fn=os.setsid,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL
-                )
-            else:
-                subprocess.Popen(
-                    ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
-                    preexec_fn=os.setsid,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL
-                )
+            subprocess.Popen(
+                ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
+                preexec_fn=os.setsid,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL
+            )
             
             print(f"[SUCCESS] Launched Sober to join {username}")
             return True, f"Joining {username}"
@@ -430,22 +403,13 @@ class ProfileManager:
         print(f"[INFO] Launching Sober with profile: {profile_name}, URI: {roblox_uri}")
         
         try:
-            if profile_name == "Main Profile":
-                subprocess.Popen(
-                    ["flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
-                    preexec_fn=os.setsid,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL
-                )
-            else:
-                subprocess.Popen(
-                    ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
-                    preexec_fn=os.setsid,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL
-                )
+            subprocess.Popen(
+                ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
+                preexec_fn=os.setsid,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL
+            )
             
             print(f"[SUCCESS] Sober launched with profile: {profile_name} and place ID: {place_id}")
             return True

@@ -64,10 +64,9 @@ class ProfileRow(Gtk.ListBoxRow):
         self.main_box.append(self.rename_button)
         self.main_box.append(self.edit_button)
         
-        if self.name != "Main Profile":
-            self.delete_button = Gtk.Button(label="Delete")
-            self.delete_button.connect("clicked", self.on_delete_clicked)
-            self.main_box.append(self.delete_button)
+        self.delete_button = Gtk.Button(label="Delete")
+        self.delete_button.connect("clicked", self.on_delete_clicked)
+        self.main_box.append(self.delete_button)
         
         self.main_box.append(self.run_button)
         
@@ -526,30 +525,24 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
             
             try:
                 import requests
-                api_url = f"https://games.roblox.com/v1/games?universeIds={place_id}"
+                api_url = f"https://apis.roblox.com/universes/v1/places/{place_id}/universe"
                 response = requests.get(api_url, timeout=5)
                 
                 if response.status_code == 200:
-                    data = response.json()
-                    if data.get('data') and len(data['data']) > 0:
-                        game_name = data['data'][0].get('name', f"Place {place_id}")
-                    else:
-                        api_url = f"https://apis.roblox.com/universes/v1/places/{place_id}/universe"
+                    universe_id = response.json().get('universeId')
+                    if universe_id:
+                        api_url = f"https://games.roblox.com/v1/games?universeIds={universe_id}"
                         response = requests.get(api_url, timeout=5)
                         if response.status_code == 200:
-                            universe_id = response.json().get('universeId')
-                            if universe_id:
-                                api_url = f"https://games.roblox.com/v1/games?universeIds={universe_id}"
-                                response = requests.get(api_url, timeout=5)
-                                if response.status_code == 200:
-                                    data = response.json()
-                                    game_name = data['data'][0].get('name', f"Place {place_id}")
-                                else:
-                                    game_name = f"Place {place_id}"
+                            data = response.json()
+                            if data.get('data') and len(data['data']) > 0:
+                                game_name = data['data'][0].get('name', f"Place {place_id}")
                             else:
                                 game_name = f"Place {place_id}"
                         else:
                             game_name = f"Place {place_id}"
+                    else:
+                        game_name = f"Place {place_id}"
                 else:
                     game_name = f"Place {place_id}"
             except Exception as e:
