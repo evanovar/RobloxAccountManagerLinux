@@ -917,7 +917,7 @@ class ProfileManagerApp(Gtk.Application):
     
     def __init__(self):
         super().__init__(application_id="com.evanovar.SoberProfileManager")
-        self.version = "1.0.2"
+        self.version = "1.0.3"
     
     def do_activate(self):
         """Application activation"""
