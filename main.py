@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Sober Profile Manager - GTK4 Version
-Main entry point for the GTK4 application
+Sober Profile Manager
+A Roblox profile manager for Linux systems. 
 """
 
 import gi

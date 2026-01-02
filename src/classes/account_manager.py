@@ -19,6 +19,8 @@ class ProfileManager:
         self.profiles_file = os.path.join(self.data_folder, "profiles.json")
         self.settings_file = os.path.join(self.data_folder, "settings.json")
         
+        self.running_processes = {}
+        
         self.profiles = self.load_profiles()
         self.base_directory = self.load_base_directory()
         
@@ -178,13 +180,14 @@ class ProfileManager:
         print(f"[INFO] Launching Sober with profile: {profile_name}")
         
         try:
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober"],
                 preexec_fn=os.setsid,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 stdin=subprocess.DEVNULL
             )
+            self.running_processes[profile_name] = proc
             
             print(f"[SUCCESS] Sober launched with profile: {profile_name}")
             return True
@@ -192,6 +195,66 @@ class ProfileManager:
         except Exception as e:
             print(f"[ERROR] Failed to launch Sober: {e}")
             return False
+    
+    def is_profile_running(self, profile_name):
+        """Check if a specific profile is currently running"""
+        if profile_name not in self.profiles:
+            return False
+        
+        profile_path = self.profiles[profile_name]['path']
+        
+        try:
+            result = subprocess.run(
+                ["flatpak", "ps"], 
+                capture_output=True, 
+                text=True
+            )
+            
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if "org.vinegarhq.Sober" in line and profile_path in line:
+                        return True
+            
+            result = subprocess.run(
+                ["ps", "aux"], 
+                capture_output=True, 
+                text=True
+            )
+            
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if "org.vinegarhq.Sober" in line and f'HOME={profile_path}' in line:
+                        return True
+                        
+        except Exception as e:
+            print(f"[WARNING] Could not check if profile is running: {e}")
+        
+        return False
+    
+    def kill_profile(self, profile_name):
+        """Kill a specific profile's Sober instance"""
+        if profile_name in self.running_processes:
+            proc = self.running_processes[profile_name]
+            if proc.poll() is None:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=2)
+                    print(f"[INFO] Terminated tracked process for '{profile_name}'")
+                except:
+                    try:
+                        proc.kill()
+                        print(f"[INFO] Force killed tracked process for '{profile_name}'")
+                    except Exception as e:
+                        print(f"[WARNING] Failed to kill tracked process: {e}")
+            del self.running_processes[profile_name]
+        
+        active_profiles = [name for name, proc in self.running_processes.items() if proc.poll() is None]
+        if not active_profiles:
+            try:
+                subprocess.run(["flatpak", "kill", "org.vinegarhq.Sober"], capture_output=True)
+                print(f"[INFO] Ran flatpak kill as backup")
+            except Exception as e:
+                print(f"[WARNING] flatpak kill failed: {e}")
     
     def set_profile_note(self, profile_name, note):
         """Set or update note for a profile"""
@@ -255,8 +318,8 @@ class ProfileManager:
         
         return None
     
-    def launch_sober_join_user(self, profile_name, username):
-        """Launch Sober and join a specific user by fetching their job ID"""
+    def launch_sober_join_user(self, profile_name, username, private_server_input=None):
+        """Launch Sober and join a specific user by fetching their job ID, or use private server code"""
         if profile_name not in self.profiles:
             print(f"[ERROR] Profile '{profile_name}' not found")
             return False, "Profile not found"
@@ -272,6 +335,15 @@ class ProfileManager:
         if not cookie_file.exists():
             print(f"[ERROR] No cookies found for profile '{profile_name}'")
             return False, "Profile not logged in"
+        
+        private_server_code = None
+        if private_server_input:
+            import re
+            match = re.search(r'privateServerLinkCode=(\d+)', private_server_input)
+            if match:
+                private_server_code = match.group(1)
+            else:
+                private_server_code = private_server_input.strip()
         
         try:
             with open(cookie_file, 'r') as f:
@@ -331,20 +403,26 @@ class ProfileManager:
             place_id = presence.get('placeId')
             job_id = presence.get('gameId')
             
-            if not place_id or not job_id:
+            if not place_id:
                 return False, "Could not get game information"
             
-            roblox_uri = f"roblox://experiences/start?placeId={place_id}&gameInstanceId={job_id}"
+            if private_server_code:
+                roblox_uri = f"roblox://placeId={place_id}&linkCode={private_server_code}"
+                print(f"[INFO] Joining {username} in place {place_id} with private server code {private_server_code}")
+            else:
+                if not job_id:
+                    return False, "Could not get game instance ID. Try providing a private server code if this is a VIP server."
+                roblox_uri = f"roblox://experiences/start?placeId={place_id}&gameInstanceId={job_id}"
+                print(f"[INFO] Joining {username} in place {place_id}, job {job_id}")
             
-            print(f"[INFO] Joining {username} in place {place_id}, job {job_id}")
-            
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
                 preexec_fn=os.setsid,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 stdin=subprocess.DEVNULL
             )
+            self.running_processes[profile_name] = proc
             
             print(f"[SUCCESS] Launched Sober to join {username}")
             return True, f"Joining {username}"
@@ -383,7 +461,7 @@ class ProfileManager:
         self.set_setting('favorite_games', favorites)
         return True
     
-    def launch_sober_with_place_id(self, profile_name, place_id, private_server_code=None):
+    def launch_sober_with_place_id(self, profile_name, place_id, private_server_input=None):
         """Launch Sober with a specific place ID (and optional private server)"""
         if profile_name not in self.profiles:
             print(f"[ERROR] Profile '{profile_name}' not found")
@@ -395,21 +473,54 @@ class ProfileManager:
             print(f"[ERROR] Profile directory not found: {profile_path}")
             return False
         
+        private_server_code = None
+        url_place_id = None
+        
+        if private_server_input:
+            import re
+            
+            if 'roblox.com/games/' in private_server_input or 'privateServerLinkCode=' in private_server_input:
+                place_match = re.search(r'games/(\d+)', private_server_input)
+                if place_match:
+                    url_place_id = place_match.group(1)
+                
+                code_match = re.search(r'privateServerLinkCode=([\d]+)', private_server_input)
+                if code_match:
+                    private_server_code = code_match.group(1)
+                
+                if not place_id or str(place_id).strip() == '':
+                    if url_place_id:
+                        place_id = url_place_id
+                        print(f"[INFO] Using place ID from URL: {place_id}")
+                    else:
+                        print(f"[ERROR] Could not extract place ID from URL")
+                        return False
+                elif url_place_id and str(place_id) != url_place_id:
+                    print(f"[ERROR] Place ID mismatch: Input={place_id}, URL={url_place_id}")
+                    return False
+            else:
+                private_server_code = private_server_input.strip()
+        
+        if not place_id or str(place_id).strip() == '':
+            print(f"[ERROR] Place ID is required")
+            return False
+        
         if private_server_code:
             roblox_uri = f"roblox://placeId={place_id}&linkCode={private_server_code}"
         else:
-            roblox_uri = f"roblox://placeId={place_id}"
+            roblox_uri = f"roblox://experiences/start?placeId={place_id}"
         
         print(f"[INFO] Launching Sober with profile: {profile_name}, URI: {roblox_uri}")
         
         try:
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 ["env", f"HOME={profile_path}", "flatpak", "run", "org.vinegarhq.Sober", roblox_uri],
                 preexec_fn=os.setsid,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 stdin=subprocess.DEVNULL
             )
+            self.running_processes[profile_name] = proc
             
             print(f"[SUCCESS] Sober launched with profile: {profile_name} and place ID: {place_id}")
             return True

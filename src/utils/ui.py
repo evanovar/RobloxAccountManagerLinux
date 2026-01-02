@@ -194,6 +194,7 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="Sober Profile Manager")
         self.set_default_size(700, 500)
+        self.app = app
         self.manager = ProfileManager()
         
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -350,19 +351,6 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
     
     def launch_profile(self, name):
         """Launch Sober with the specified profile"""
-        multi_instance = self.manager.get_setting('multi_instance', False)
-        if not multi_instance:
-            try:
-                result = subprocess.run(["flatpak", "ps"], capture_output=True, text=True)
-                if result.returncode == 0 and "org.vinegarhq.Sober" in result.stdout:
-                    self.show_warning(
-                        "Instance Already Running",
-                        "A Sober instance is already running.\nEnable multi-instance in settings to launch multiple profiles."
-                    )
-                    return
-            except Exception:
-                pass
-        
         success = self.manager.launch_sober(name)
         if success:
             if self.manager.get_setting('launch_notifications', True):
@@ -575,29 +563,37 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
                 self.manager.set_setting('last_selected_profile', profile_name)
                 
                 place_id_input = place_id_entry.get_text().strip()
-                private_server_code = private_server_entry.get_text().strip() or None
+                private_server_input = private_server_entry.get_text().strip() or None
                 
-                if not place_id_input:
-                    self.show_error("Place ID cannot be empty.")
-                    return
+                place_id = None
                 
-                import re
-                match = re.search(r'(?:games/|placeId=)(\d+)', place_id_input)
-                if match:
-                    place_id = match.group(1)
-                elif place_id_input.isdigit():
-                    place_id = place_id_input
-                else:
-                    self.show_error("Invalid Place ID or URL format.")
-                    return
+                if place_id_input:
+                    import re
+                    match = re.search(r'(?:games/|placeId=)(\d+)', place_id_input)
+                    if match:
+                        place_id = match.group(1)
+                        code_match = re.search(r'privateServerLinkCode=([\d]+)', place_id_input)
+                        if code_match and not private_server_input:
+                            private_server_input = code_match.group(1)
+                    elif place_id_input.isdigit():
+                        place_id = place_id_input
+                    else:
+                        self.show_error("Invalid Place ID or URL format.")
+                        return
+                
+                if not place_id and private_server_input:
+                    import re
+                    match = re.search(r'games/(\d+)', private_server_input)
+                    if match:
+                        place_id = match.group(1)
                 
                 self.manager.set_setting('last_place_id', place_id_input)
-                self.manager.set_setting('last_private_server_code', private_server_code or '')
+                self.manager.set_setting('last_private_server_code', private_server_input or '')
                 
-                success = self.manager.launch_sober_with_place_id(profile_name, place_id, private_server_code)
+                success = self.manager.launch_sober_with_place_id(profile_name, place_id, private_server_input)
                 if success:
                     msg = f"Launching profile '{profile_name}' with place ID {place_id}"
-                    if private_server_code:
+                    if private_server_input:
                         msg += f" (Private Server)"
                     self.show_info(msg)
                     d.destroy()
@@ -616,7 +612,7 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
             return
         
         dialog = Gtk.Dialog(title="Join User", transient_for=self, modal=True)
-        dialog.set_default_size(400, 150)
+        dialog.set_default_size(500, 250)
         content_area = dialog.get_content_area()
         content_area.set_spacing(10)
         content_area.set_margin_top(10)
@@ -649,6 +645,24 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         username_entry.set_placeholder_text("Enter Roblox username to join")
         content_area.append(username_entry)
         
+        private_server_label = Gtk.Label(label="Private Server Access Code or Link (optional):")
+        private_server_label.set_xalign(0)
+        content_area.append(private_server_label)
+        
+        private_server_entry = Gtk.Entry()
+        private_server_entry.set_placeholder_text("e.g., 12975546050604597555243939606702 or full URL")
+        
+        last_private_code = self.manager.get_setting('last_join_private_server_code', '')
+        if last_private_code:
+            private_server_entry.set_text(last_private_code)
+        
+        content_area.append(private_server_entry)
+        
+        info_label = Gtk.Label()
+        info_label.set_markup("<small><i>Paste the access code or the full private server link.</i></small>")
+        info_label.set_wrap(True)
+        content_area.append(info_label)
+        
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         dialog.add_button("Join", Gtk.ResponseType.OK)
         
@@ -662,15 +676,18 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
                 
                 profile_name = profile_names_list[selected_index]
                 username = username_entry.get_text().strip()
+                private_server_code = private_server_entry.get_text().strip() or None
                 
                 self.manager.set_setting('last_selected_profile', profile_name)
+                if private_server_code:
+                    self.manager.set_setting('last_join_private_server_code', private_server_code)
                 
                 if not username:
                     self.show_error("Username cannot be empty.")
                     return
                 
                 d.destroy()
-                success, message = self.manager.launch_sober_join_user(profile_name, username)
+                success, message = self.manager.launch_sober_join_user(profile_name, username, private_server_code)
                 if success:
                     self.show_info(f"Launching Sober to join {username}!")
                 else:
@@ -698,20 +715,6 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         
         separator1 = Gtk.Separator()
         content_area.append(separator1)
-        
-        multi_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        multi_label = Gtk.Label(label="Enable Multi-Instance (unstable)")
-        multi_label.set_xalign(0)
-        multi_label.set_hexpand(True)
-        multi_label.set_tooltip_text("Allow launching multiple Sober instances simultaneously")
-        
-        multi_switch = Gtk.Switch()
-        multi_switch.set_active(self.manager.get_setting('multi_instance', False))
-        multi_switch.connect("state-set", self.on_multi_instance_changed)
-        
-        multi_box.append(multi_label)
-        multi_box.append(multi_switch)
-        content_area.append(multi_box)
         
         refresh_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         refresh_label = Gtk.Label(label="Auto-Refresh Profiles")
@@ -772,6 +775,10 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         separator2 = Gtk.Separator()
         content_area.append(separator2)
         
+        kill_button = Gtk.Button(label="Kill All Sober Processes")
+        kill_button.connect("clicked", lambda b: self.kill_all_sober())
+        content_area.append(kill_button)
+        
         update_button = Gtk.Button(label="Check for Updates")
         update_button.connect("clicked", lambda b: self.check_for_updates())
         content_area.append(update_button)
@@ -781,7 +788,7 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         
         about_label = Gtk.Label()
         about_label.set_markup(
-            "<b>Sober Profile Manager</b> v1.0.3-Linux\n\n"
+            f"<b>Sober Profile Manager</b> v{self.app.version}-Linux\n\n"
             "Made by evanovar\n\n"
         )
         about_label.set_justify(Gtk.Justification.CENTER)
@@ -861,14 +868,28 @@ class ProfileManagerWindow(Gtk.ApplicationWindow):
         except Exception as e:
             self.show_error(f"Failed to check for updates:\n{e}")
     
-    def on_multi_instance_changed(self, switch, state):
-        """Handle multi-instance setting change"""
-        self.manager.set_setting('multi_instance', state)
-        if state:
-            self.show_info("Multi-instance enabled!\nYou can now launch multiple Sober profiles simultaneously.")
-        else:
-            self.show_info("Multi-instance disabled.\nOnly one Sober instance can run at a time.")
-        return False
+    def kill_all_sober(self):
+        """Kill all Sober processes"""
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text="Kill All Sober Processes?"
+        )
+        dialog.set_property("secondary-text", "This will force-close all running Sober instances.")
+        
+        def handle_kill_response(d, response):
+            if response == Gtk.ResponseType.YES:
+                try:
+                    subprocess.run("flatpak kill org.vinegarhq.Sober", shell=True)
+                    self.show_info("All Sober processes have been killed.")
+                except Exception as e:
+                    self.show_error(f"Failed to kill Sober processes:\n{e}")
+            d.destroy()
+        
+        dialog.connect("response", handle_kill_response)
+        dialog.present()
     
     def on_show_paths_changed(self, state):
         """Handle show paths setting change"""
@@ -918,7 +939,7 @@ class ProfileManagerApp(Gtk.Application):
     
     def __init__(self):
         super().__init__(application_id="com.evanovar.SoberProfileManager")
-        self.version = "1.0.3"
+        self.version = "1.0.4"
     
     def do_activate(self):
         """Application activation"""
