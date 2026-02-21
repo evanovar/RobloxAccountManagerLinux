@@ -105,10 +105,6 @@ pip install -r requirements.txt --upgrade
 - Ensure Sober is installed via Flatpak: `flatpak list | grep Sober`
 - Try running manually: `flatpak run org.vinegarhq.Sober`
 
-### Multi-instance not working
-- Enable in Settings
-- Check if Sober supports multiple instances on your system
-
 ### Game names not fetching
 - Ensure `requests` library is installed: `pip install requests`
 - Check your internet connection
