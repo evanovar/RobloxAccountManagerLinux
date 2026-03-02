@@ -6,6 +6,8 @@ A modern GTK4 profile manager for [Sober](https://sober.vinegarhq.org/) on Linux
 ![Python](https://img.shields.io/badge/python-3.7+-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux-orange.svg)
 
+As of right now, I have lost interest on developing on this program, this might change in the future.
+
 ## Features
 
 - 🚀 **Profile Management** - Create, rename, delete, and launch multiple Sober profiles
